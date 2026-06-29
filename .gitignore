@@ -1,0 +1,14 @@
+# NEVER COMMIT THESE TO ANY GIT REPOSITORY
+# .env- contains all our security keys, exposing it is a security disaster
+.env
+
+# venv is our local python environment, NEVER COMMIT IT
+venv/
+
+# Python auto-generates these, they are not needed in version control
+__pycache__/
+*.pyc
+*.pyo
+
+# Upload folders
+uploads/
