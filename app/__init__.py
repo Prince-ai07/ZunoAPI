@@ -3,13 +3,14 @@
 # We use something called the "App Factory Pattern" - instead of creating the app directly at top level, we wrap it in a function called create_app(). This allows full control over configuration and makes testing much easier.
 # Everything connect through here
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
 from flask_mail import Mail                  # NEW — handles sending emails
 from dotenv import load_dotenv
 from datetime import timedelta
+from app.routes.health import health_bp
 import os
 
 # Load all variables from our .env file into the environment
@@ -106,6 +107,7 @@ def create_app():
     app.register_blueprint(reputation_bp,   url_prefix='/api/reputation')
     app.register_blueprint(catalog_bp,      url_prefix='/api/catalog')
     app.register_blueprint(admin_bp,        url_prefix='/api/admin')
+    app.register_blueprint(health_bp, url_prefix='')
 
     # ── START BACKGROUND JOBS ─────────────────────────────────
     # The scheduler runs automatic tasks in the background
@@ -114,4 +116,72 @@ def create_app():
     from app.services.scheduler import start_scheduler
     start_scheduler(app)
 
+
+    # ── CORS CONFIGURATION ───────────────────────────────────
+    # CORS allows your frontend (running on a different port
+    # or domain) to make requests to this API.
+    # Without this, browsers block cross-origin requests.
+    from flask_cors import CORS
+    CORS(app, resources={
+        r"/api/*": {
+            # In production replace * with your actual domain
+            # e.g. "https://zuno.co.ke"
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
+
+        # ── SECURITY HEADERS ──────────────────────────────────────
+    # Add security headers to every response automatically
+    from app.utils.security import add_security_headers
+    app.after_request(add_security_headers)
+
+    # ── GLOBAL ERROR HANDLERS ─────────────────────────────────
+    # Register clean JSON error responses for all HTTP errors
+    from app.utils.errors import register_error_handlers
+    register_error_handlers(app)
+
+   
+
     return app
+
+# ── JWT ERROR HANDLERS ────────────────────────────────────────
+# These are defined outside create_app() so VS Code can properly
+# resolve the parameters and imports.
+# jwt is the JWTManager instance created at the top of this file.
+# Flask-JWT-Extended calls these automatically when token errors occur.
+
+@jwt.unauthorized_loader
+def missing_token_callback(error):
+    """Called when a protected route is accessed with no token."""
+    return jsonify({
+        'error': 'Authorization required',
+        'message': 'No token provided. Please log in.',
+        'status': 401
+    }), 401
+
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error):
+    """Called when a token is malformed or tampered with."""
+    return jsonify({
+        'error': 'Invalid token',
+        'message': 'Your token is invalid. Please log in again.',
+        'status': 401
+    }), 401
+
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_data):
+    """
+    Called when a valid token has expired.
+    jwt_header: the decoded header of the expired token
+    jwt_data:   the decoded payload of the expired token
+    Both are passed automatically by Flask-JWT-Extended.
+    """
+    return jsonify({
+        'error': 'Token expired',
+        'message': 'Your session expired. Please log in again.',
+        'status': 401
+    }), 401

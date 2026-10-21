@@ -165,3 +165,45 @@ def check_rate_limit():
         }), 429
 
     return None  # not rate limited, proceed normally
+
+
+def add_security_headers(response):
+    """
+    Adds security headers to every HTTP response.
+
+    These headers protect users from common web attacks:
+
+    X-Content-Type-Options: Stops browsers from guessing
+    content type — prevents MIME sniffing attacks.
+
+    X-Frame-Options: Prevents your pages from being loaded
+    in an iframe — stops clickjacking attacks.
+
+    X-XSS-Protection: Enables browser's built-in XSS filter.
+
+    Strict-Transport-Security: Forces HTTPS — prevents
+    downgrade attacks. Only active in production.
+
+    Content-Security-Policy: Controls what resources the
+    browser can load — prevents XSS and data injection.
+    """
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Prevent clickjacking
+    response.headers['X-Frame-Options'] = 'DENY'
+
+    # Enable XSS filter
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Remove server version info (don't tell attackers
+    # what software we are running)
+    response.headers['Server'] = 'Zuno'
+
+    # Cache control for API responses
+    # API responses should never be cached by browsers
+    response.headers['Cache-Control'] = (
+        'no-store, no-cache, must-revalidate, max-age=0'
+    )
+
+    return response

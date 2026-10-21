@@ -2,30 +2,34 @@
 #
 # Handles all file uploads to Cloudinary for Zuno.
 #
-# Used for:
-# - Seller KYC documents (National ID photos, selfies)
-# - Dispute evidence (photos, screenshots)
-# - Product catalog photos
-# - Profile photos
-#
-# WHY CLOUDINARY:
-# Files should never be stored on your server.
-# Your server can restart, crash, or run out of space.
-# Cloudinary stores files permanently in the cloud,
-# gives you a permanent URL, and handles image
-# optimization automatically.
+# FIX APPLIED:
+# Cloudinary configuration is now done INSIDE each function
+# instead of at module level. This ensures .env values are
+# always loaded before Cloudinary tries to read them.
+# Configuring at module level caused "Must supply api_key"
+# because the file was imported before load_dotenv() ran.
 
 import cloudinary
 import cloudinary.uploader
 import os
 
-# Configure Cloudinary with credentials from .env
-cloudinary.config(
-    cloud_name=os.getenv('xosi0fwd'),
-    api_key=os.getenv('218796364141752'),
-    api_secret=os.getenv('AqqNdPJA04q5GxKhzWfz_olw7fk'),
-    secure=True  # always use HTTPS
-)
+
+def _configure_cloudinary():
+    """
+    Configures Cloudinary with credentials from .env.
+    Called at the start of every upload function to ensure
+    credentials are always available when needed.
+    
+    We do this inside functions rather than at module level
+    because module-level code runs at import time, which can
+    be before load_dotenv() has populated os.environ.
+    """
+    cloudinary.config(
+        cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.getenv('CLOUDINARY_API_KEY'),
+        api_secret=os.getenv('CLOUDINARY_API_SECRET'),
+        secure=True
+    )
 
 
 def upload_id_document(file, seller_id, document_type='id_front'):
@@ -45,18 +49,16 @@ def upload_id_document(file, seller_id, document_type='id_front'):
         url      : the Cloudinary URL if successful
         error    : error message if failed
     """
+    # Configure Cloudinary fresh before every upload
+    _configure_cloudinary()
+
     try:
-        # Upload to a private KYC folder
-        # Files are organized as: kyc/seller_1/id_front
         result = cloudinary.uploader.upload(
             file,
             folder=f"zuno/kyc/seller_{seller_id}",
             public_id=document_type,
-            # Overwrite if seller resubmits
             overwrite=True,
-            # Add metadata tags for easy searching in Cloudinary
             tags=[f"seller_{seller_id}", "kyc", document_type],
-            # Resource type auto-detects image vs PDF
             resource_type='auto'
         )
 
@@ -67,7 +69,9 @@ def upload_id_document(file, seller_id, document_type='id_front'):
         }
 
     except Exception as e:
+        import traceback
         print(f"[CLOUDINARY] Upload failed: {str(e)}")
+        print(f"[CLOUDINARY] Full error: {traceback.format_exc()}")
         return {
             'success': False,
             'error': str(e)
@@ -83,6 +87,8 @@ def upload_dispute_evidence(file, dispute_id, submitted_by):
         dispute_id   : dispute database ID
         submitted_by : phone number of who is submitting
     """
+    _configure_cloudinary()
+
     try:
         result = cloudinary.uploader.upload(
             file,
@@ -109,13 +115,13 @@ def upload_product_photo(file, seller_id, product_name):
     Uploads a product catalog photo to Cloudinary.
     Automatically optimizes for web display.
     """
+    _configure_cloudinary()
+
     try:
         result = cloudinary.uploader.upload(
             file,
             folder=f"zuno/products/seller_{seller_id}",
             tags=[f"seller_{seller_id}", "product"],
-            # Automatically resize to max 1200px width
-            # while maintaining aspect ratio
             transformation=[
                 {'width': 1200, 'crop': 'limit'},
                 {'quality': 'auto'}
@@ -141,13 +147,14 @@ def upload_profile_photo(file, user_id):
     Uploads a seller profile photo to Cloudinary.
     Crops to square for consistent display.
     """
+    _configure_cloudinary()
+
     try:
         result = cloudinary.uploader.upload(
             file,
             folder=f"zuno/profiles",
             public_id=f"seller_{user_id}",
             overwrite=True,
-            # Crop to square like a profile photo
             transformation=[
                 {'width': 400, 'height': 400,
                  'crop': 'fill', 'gravity': 'face'},
