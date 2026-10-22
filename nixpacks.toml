@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["python312", "pkg-config", "libmysqlclient-dev"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn run:app --workers 2 --bind 0.0.0.0:$PORT"
